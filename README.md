@@ -225,15 +225,16 @@ python3 server.py
 | **架构模式** | 单页应用（SPA），前端驱动 |
 | **UI 框架** | 无框架，纯原生 JavaScript |
 | **渲染策略** | 脏标记（Dirty Flag）+ rAF 批处理 |
-| **性能优化** | 轻量/全量双轨渲染、增量 DOM 更新 |
+| **性能优化** | 轻量/全量双轨渲染、增量 DOM 更新、总时长缓存 |
 | **存储策略** | 双轨存储（localStorage + 服务端文件同步） |
 
-### 性能优化（v8.5）
+### 性能优化（v8.5 / v9.0）
 
 - **脏标记渲染**：只在标记变更时重绘，避免不必要的 DOM 操作
 - **rAF 批处理**：`requestAnimationFrame` 合并多次更新为一次渲染
 - **轻量/全量双轨**：计时器 tick 时只更新 textContent，不操作 innerHTML
 - **增量会话更新**：时间线只更新活跃 session 的结束时间，避免全量重绘
+- **总学习时长缓存**：`getTotals()` 缓存跨日期遍历结果，仅在数据变更时重新计算，避免每秒 tick 的全量扫描（v9.0）
 
 ### 数据存储（v8.6）
 
@@ -307,7 +308,7 @@ python3 server.py
 ├── README.md              ← 本文件
 ├── index.html             ← 主页面（HTML 结构）
 ├── styles.css             ← 样式表（含暗色模式、响应式）
-├── app.js                 ← 核心逻辑（约 1600 行）
+├── app.js                 ← 核心逻辑（约 1670 行）
 ├── server.py              ← Python 本地服务器
 ├── start.command          ← macOS 双击启动脚本
 ├── data.json              ← 数据文件（运行后自动生成）
