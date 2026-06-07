@@ -571,8 +571,22 @@ body::before {
 }
 
 /* ===== Todo ===== */
+.todo-section {
+  margin-bottom: 12px;
+}
+.todo-section:last-child {
+  margin-bottom: 0;
+}
+.todo-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-family: var(--sans);
+  letter-spacing: 0.02em;
+}
 .todo-input-wrap {
-  display: flex; gap: 6px; margin-bottom: 10px;
+  display: flex; gap: 6px; margin-bottom: 6px;
 }
 .todo-input {
   flex: 1; padding: 6px 10px;

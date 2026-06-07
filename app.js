@@ -175,7 +175,8 @@ const QUOTES = [
 // ============================================================
 let state = {
   date: '',
-  todos: [],
+  todos: [],     // { id, text, createdAt }
+  nextTaskId: 0,
   subjects: DEFAULT_SUBJECTS.map(s => ({ ...s })),
   goalSchool: '',
   goalMajor: '',
@@ -272,9 +273,12 @@ const navNext = $('navNext');
 const goalSchool = $('goalSchool');
 const goalMajor = $('goalMajor');
 const headerGoalSubjects = $('headerGoalSubjects');
-const todoInput = $('todoInput');
-const todoList = $('todoList');
-const addTodoBtn = $('addTodoBtn');
+const todoGeneralInput = $('todoGeneralInput');
+const todoGeneralList = $('todoGeneralList');
+const addGeneralBtn = $('addGeneralBtn');
+const todoDailyInput = $('todoDailyInput');
+const todoDailyList = $('todoDailyList');
+const addDailyBtn = $('addDailyBtn');
 const notificationEl = $('notification');
 const themeToggle = $('themeToggle');
 const datePart = $('datePart');
@@ -495,6 +499,19 @@ function load() {
         state.date = todayStr();
       }
     }
+    // 旧数据迁移: {text, done} → {id, text, createdAt, deletedAt}
+    if (state.todos.length > 0) {
+      const first = state.todos[0];
+      if (typeof first === 'object' && 'done' in first) {
+        const old = state.todos;
+        state.todos = old.map((t, i) => ({ id: i, text: t.text, createdAt: '2026-01-01', deletedAt: null }));
+        state.nextTaskId = old.length;
+      } else {
+        // 确保已有 deletedAt 字段
+        state.todos.forEach(t => { if (t.deletedAt === undefined) t.deletedAt = null; });
+      }
+    }
+    if (!state.nextTaskId) state.nextTaskId = 0;
     try {
       const a = localStorage.getItem('ky_achievements');
       if (a) unlockedAchievements = JSON.parse(a);
@@ -935,6 +952,7 @@ function loadDiary(dateStr) {
   updateSubjectDurations();
   renderGoals();
   renderTimeline();
+  renderTodos();
 }
 
 function hashCode(s) {
@@ -1122,20 +1140,42 @@ function renderTimeline() {
 //  Todo
 // ============================================================
 function renderTodos() {
-  if (!state.todos.length) {
-    todoList.innerHTML = '<li class="todo-empty">今天还没有任务 ✨</li>';
-    return;
+  // General tasks — 从创建日期起至删除日期前累积显示
+  const eligible = state.todos.filter(t => t.createdAt <= currentDate && (!t.deletedAt || t.deletedAt > currentDate));
+  const doneTasks = diaryData[currentDate]?.doneTasks || {};
+
+  if (!eligible.length) {
+    todoGeneralList.innerHTML = '<li class="todo-empty">还没有通用任务 ✨</li>';
+  } else {
+    todoGeneralList.innerHTML = eligible.map(t => {
+      const isDone = doneTasks[t.id] || false;
+      return `<li class="todo-item" data-task-id="${t.id}">
+        <button class="todo-check ${isDone ? 'done' : ''}" data-task-id="${t.id}" role="checkbox" aria-checked="${isDone}" aria-label="${isDone ? '取消完成' : '标记完成'}：${esc(t.text)}"></button>
+        <span class="todo-text ${isDone ? 'done' : ''}">${esc(t.text)}</span>
+        <button class="todo-del" data-task-id="${t.id}" aria-label="删除任务：${esc(t.text)}">✕</button>
+      </li>`;
+    }).join('');
+    const items = [...todoGeneralList.querySelectorAll('.todo-item')];
+    items.sort((a, b) => (a.querySelector('.todo-check').classList.contains('done')?1:0) - (b.querySelector('.todo-check').classList.contains('done')?1:0));
+    items.forEach(el => todoGeneralList.appendChild(el));
   }
-  todoList.innerHTML = state.todos.map((t, i) =>
-    `<li class="todo-item" data-index="${i}">
-      <button class="todo-check ${t.done ? 'done' : ''}" data-index="${i}" role="checkbox" aria-checked="${t.done}" aria-label="${t.done ? '取消完成' : '标记完成'}：${esc(t.text)}"></button>
-      <span class="todo-text ${t.done ? 'done' : ''}">${esc(t.text)}</span>
-      <button class="todo-del" data-index="${i}" aria-label="删除任务：${esc(t.text)}">✕</button>
-    </li>`
-  ).join('');
-  const items = [...todoList.querySelectorAll('.todo-item')];
-  items.sort((a, b) => (a.querySelector('.todo-check').classList.contains('done')?1:0) - (b.querySelector('.todo-check').classList.contains('done')?1:0));
-  items.forEach(el => todoList.appendChild(el));
+
+  // Daily tasks
+  const dailyTodos = diaryData[currentDate]?.todos || [];
+  if (!dailyTodos.length) {
+    todoDailyList.innerHTML = '<li class="todo-empty">还没有当天任务 ✨</li>';
+  } else {
+    todoDailyList.innerHTML = dailyTodos.map((t, i) =>
+      `<li class="todo-item" data-index="${i}">
+        <button class="todo-check ${t.done ? 'done' : ''}" data-index="${i}" role="checkbox" aria-checked="${t.done}" aria-label="${t.done ? '取消完成' : '标记完成'}：${esc(t.text)}"></button>
+        <span class="todo-text ${t.done ? 'done' : ''}">${esc(t.text)}</span>
+        <button class="todo-del" data-index="${i}" aria-label="删除任务：${esc(t.text)}">✕</button>
+      </li>`
+    ).join('');
+    const items = [...todoDailyList.querySelectorAll('.todo-item')];
+    items.sort((a, b) => (a.querySelector('.todo-check').classList.contains('done')?1:0) - (b.querySelector('.todo-check').classList.contains('done')?1:0));
+    items.forEach(el => todoDailyList.appendChild(el));
+  }
 }
 
 function notify(msg) {
@@ -1551,20 +1591,70 @@ if (cleanupBtn) {
   cleanupBtn.addEventListener('click', manualCleanup);
 }
 
-// Todo
-addTodoBtn.addEventListener('click', () => {
-  const text = todoInput.value.trim();
+// Todo — 通用任务（累积：创建后出现在该天及之后所有日期）
+addGeneralBtn.addEventListener('click', () => {
+  const text = todoGeneralInput.value.trim();
   if (!text) return;
-  state.todos.push({ text, done: false });
-  todoInput.value = '';
+  const task = { id: state.nextTaskId++, text, createdAt: currentDate, deletedAt: null };
+  state.todos.push(task);
+  todoGeneralInput.value = '';
   renderTodos(); save();
 });
-todoInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTodoBtn.click(); });
-todoList.addEventListener('click', e => {
+todoGeneralInput.addEventListener('keydown', e => { if (e.key === 'Enter') addGeneralBtn.click(); });
+todoGeneralList.addEventListener('click', e => {
   const ck = e.target.closest('.todo-check');
-  if (ck) { const i = parseInt(ck.dataset.index); if (i>=0) { state.todos[i].done = !state.todos[i].done; renderTodos(); save(); } return; }
+  if (ck) {
+    const taskId = parseInt(ck.dataset.taskId);
+    if (!isNaN(taskId)) {
+      ensurePage(currentDate);
+      if (!diaryData[currentDate].doneTasks) diaryData[currentDate].doneTasks = {};
+      diaryData[currentDate].doneTasks[taskId] = !diaryData[currentDate].doneTasks[taskId];
+      renderTodos(); save();
+    }
+    return;
+  }
   const dl = e.target.closest('.todo-del');
-  if (dl) { const i = parseInt(dl.dataset.index); if (i>=0) { state.todos.splice(i,1); renderTodos(); save(); } }
+  if (dl) {
+    const taskId = parseInt(dl.dataset.taskId);
+    if (!isNaN(taskId)) {
+      const task = state.todos.find(t => t.id === taskId);
+      if (task) task.deletedAt = currentDate; // 过去已定型，只影响当前及以后
+      renderTodos(); save();
+    }
+  }
+});
+
+// Todo — 当天任务
+addDailyBtn.addEventListener('click', () => {
+  const text = todoDailyInput.value.trim();
+  if (!text) return;
+  ensurePage(currentDate);
+  if (!diaryData[currentDate].todos) diaryData[currentDate].todos = [];
+  diaryData[currentDate].todos.push({ text, done: false });
+  todoDailyInput.value = '';
+  renderTodos(); save();
+});
+todoDailyInput.addEventListener('keydown', e => { if (e.key === 'Enter') addDailyBtn.click(); });
+todoDailyList.addEventListener('click', e => {
+  const dailyTodos = diaryData[currentDate]?.todos;
+  if (!dailyTodos) return;
+  const ck = e.target.closest('.todo-check');
+  if (ck) {
+    const i = parseInt(ck.dataset.index);
+    if (i >= 0 && i < dailyTodos.length) {
+      dailyTodos[i].done = !dailyTodos[i].done;
+      renderTodos(); save();
+    }
+    return;
+  }
+  const dl = e.target.closest('.todo-del');
+  if (dl) {
+    const i = parseInt(dl.dataset.index);
+    if (i >= 0 && i < dailyTodos.length) {
+      dailyTodos.splice(i, 1);
+      renderTodos(); save();
+    }
+  }
 });
 
 // ============================================================
