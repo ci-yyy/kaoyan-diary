@@ -203,6 +203,8 @@ function markAllDirty() { Object.keys(dirty).forEach(k => { dirty[k] = true; });
 // Track last session count for timeline optimization
 let _lastSessionCount = -1;
 let _lastActiveKey = null;
+let _cachedTotalSecBase = -1;
+let _cachedStudyDays = -1;
 
 // ---- 8.5: rAF batching ----
 let _rafPending = false;
@@ -218,6 +220,33 @@ function scheduleUpdate(fn) {
       fns.forEach(f => { try { f(); } catch(e) { console.error(e); } });
     });
   }
+}
+
+// ====== Totals cache ======
+function _invalidateTotalsCache() { _cachedTotalSecBase = -1; _cachedStudyDays = -1; }
+
+function getTotals() {
+  if (_cachedTotalSecBase === -1) {
+    let totalSec = 0, studyDays = 0;
+    const allDates = Object.keys(diaryData);
+    for (let i = 0; i < allDates.length; i++) {
+      const p = diaryData[allDates[i]];
+      if (p.study) {
+        const ds = Object.values(p.study).reduce((a, b) => a + b, 0);
+        totalSec += ds;
+      }
+      const hasText = p.text && p.text.trim().length > 0;
+      const hasStudy = p.study && Object.values(p.study).reduce((a, b) => a + b, 0) > 0;
+      if (hasText || hasStudy) studyDays++;
+    }
+    _cachedTotalSecBase = totalSec;
+    _cachedStudyDays = studyDays;
+  }
+  let totalSec = _cachedTotalSecBase;
+  if (activeTracking && trackingStart) {
+    totalSec += Math.floor((Date.now() - trackingStart) / 1000);
+  }
+  return { totalSec, studyDays: _cachedStudyDays };
 }
 
 // ============================================================
@@ -427,6 +456,7 @@ async function initServerSync() {
 function save() {
   // Auto-truncate sessions older than 30 days
   truncateOldSessions();
+  _invalidateTotalsCache();
 
   try {
     localStorage.setItem('ky_diary_state', JSON.stringify(state));
@@ -487,11 +517,6 @@ function load() {
     const d = localStorage.getItem('ky_diary_pages');
     if (d) diaryData = JSON.parse(d);
   } catch {}
-
-  // Ensure today exists
-  if (!diaryData[todayStr()]) {
-    diaryData[todayStr()] = { text: '', study: {}, mood: '' };
-  }
 
   // Auto-cleanup old sessions on load
   truncateOldSessions();
@@ -710,13 +735,13 @@ loadMonthState();
 // ============================================================
 //  Subject Timer
 // ============================================================
-function ensureTodayStudy() {
-  if (!diaryData[todayStr()]) diaryData[todayStr()] = { text: '', study: {}, mood: '' };
+function ensurePage(dateStr) {
+  if (!diaryData[dateStr]) diaryData[dateStr] = { text: '', study: {}, mood: '' };
+  if (!diaryData[dateStr].study) diaryData[dateStr].study = {};
 }
 
 function getStudyData(dateStr) {
-  if (!diaryData[dateStr]) diaryData[dateStr] = { text: '', study: {}, mood: '' };
-  if (!diaryData[dateStr].study) diaryData[dateStr].study = {};
+  ensurePage(dateStr);
   return diaryData[dateStr].study;
 }
 
@@ -782,7 +807,7 @@ function toggleSubjectTimer(key) {
     notify('只能记录今天的学习时间');
     return;
   }
-  ensureTodayStudy();
+  ensurePage(todayStr());
   ensureSessions(todayStr());
 
   const sub = state.subjects.find(s => s.key === key);
@@ -1000,23 +1025,8 @@ function renderTimelineFull() {
   const todayMin = Math.round(todaySec / 60);
   sideDailyProgress.textContent = `${todayMin} 分钟`;
 
-  // Total progress
-  const allDates = Object.keys(diaryData);
-  let totalSec = 0;
-  let studyDays = 0;
-  allDates.forEach(d => {
-    const p = diaryData[d];
-    if (p.study) {
-      const ds = Object.values(p.study).reduce((a, b) => a + b, 0);
-      totalSec += ds;
-    }
-    const hasText = p.text && p.text.trim().length > 0;
-    const hasStudy = p.study && Object.values(p.study).reduce((a, b) => a + b, 0) > 0;
-    if (hasText || hasStudy) studyDays++;
-  });
-  if (activeTracking && trackingStart) {
-    totalSec += Math.floor((Date.now() - trackingStart) / 1000);
-  }
+  // Total progress (uses cached totals)
+  const { totalSec, studyDays } = getTotals();
   const totalHours = (totalSec / 3600);
   const targetHours = state.totalTargetHours || 500;
   const totalPct = Math.min(100, Math.round((totalHours / targetHours) * 100));
@@ -1072,14 +1082,8 @@ function renderTimelineTick() {
   }
   sideDailyProgress.textContent = `${Math.round(todaySec / 60)} 分钟`;
 
-  // Update total progress
-  const allDates = Object.keys(diaryData);
-  let totalSec = 0;
-  allDates.forEach(d => {
-    const p = diaryData[d];
-    if (p.study) totalSec += Object.values(p.study).reduce((a, b) => a + b, 0);
-  });
-  if (trackingStart) totalSec += Math.floor((Date.now() - trackingStart) / 1000);
+  // Update total progress (uses cached totals)
+  const { totalSec } = getTotals();
   const totalHours = totalSec / 3600;
   const totalPct = Math.min(100, Math.round((totalHours / (state.totalTargetHours || 500)) * 100));
   sideTotalProgress.textContent = `${totalHours.toFixed(1)} 小时`;
@@ -1576,9 +1580,6 @@ updateStorageInfo();
 if (state.date !== todayStr()) {
   state.date = todayStr();
 }
-
-// Ensure today diary exists
-if (!diaryData[todayStr()]) diaryData[todayStr()] = { text: '', study: {}, mood: '' };
 
 renderTodos();
 renderGoals();
