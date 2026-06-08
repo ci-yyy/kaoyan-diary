@@ -1,0 +1,50 @@
+// ============================================================
+//  DOM refs — 所有元素引用
+// ============================================================
+
+const $ = id => document.getElementById(id);
+const countdownNum = $('countdownNum');
+const countdownWeeks = $('countdownWeeks');
+const countdownHours = $('countdownHours');
+const examDateDisplay = $('examDateDisplay');
+const subjectMiniList = $('subjectMiniList');
+const entryList = $('entryList');
+const diaryDate = $('diaryDate');
+const diaryWeekday = $('diaryWeekday');
+const subjectGrid = $('subjectGrid');
+const diaryText = $('diaryText');
+const wordCount = $('wordCount');
+const diarySaveStatus = $('diarySaveStatus');
+const diarySaveBtn = $('diarySaveBtn');
+const navPrev = $('navPrev');
+const navToday = $('navToday');
+const navNext = $('navNext');
+const goalSchool = $('goalSchool');
+const goalMajor = $('goalMajor');
+const headerGoalSubjects = $('headerGoalSubjects');
+const todoGeneralInput = $('todoGeneralInput');
+const todoGeneralList = $('todoGeneralList');
+const addGeneralBtn = $('addGeneralBtn');
+const todoDailyInput = $('todoDailyInput');
+const todoDailyList = $('todoDailyList');
+const addDailyBtn = $('addDailyBtn');
+const notificationEl = $('notification');
+const themeToggle = $('themeToggle');
+const datePart = $('datePart');
+const timePart = $('timePart');
+const quoteBar = $('quoteBar');
+const sideDailyProgress = $('sideDailyProgress');
+const sideTotalProgress = $('sideTotalProgress');
+const sideTotalBar = $('sideTotalBar');
+const sideTotalDays = $('sideTotalDays');
+const sideTotalPercent = $('sideTotalPercent');
+const timelineList = $('timelineList');
+const entrySearch = $('entrySearch');
+const weeklyToggle = $('weeklyToggle');
+const weeklyReport = $('weeklyReport');
+const exportJSON = $('exportJSON');
+const exportTXT = $('exportTXT');
+const storageInfo = $('storageInfo');
+const chartBarWeek = $('chartBarWeek');
+const chartSubjectDist = $('chartSubjectDist');
+const cleanupBtn = $('cleanupDataBtn');
